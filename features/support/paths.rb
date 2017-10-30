@@ -20,6 +20,8 @@ module NavigationHelpers
     when /^the personal page for "(.*)"$/
         id = User.find_by(username: $1).id
         user_path(id)
+        
+    when /^the semesters page$/ then '/semesters'
 
     when /^the preferences page for "(.*)$"/
         id = User.find_by(username: $1).id

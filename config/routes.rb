@@ -1,14 +1,18 @@
 Rails.application.routes.draw do
 
-    root :to => "application#home"
+  root :to => "application#home"
 
-    resources :users do
+  resources :users do
         resources :preferences, :except => [:destroy] do
             collection do
               get "/none" , :to => "preferences#no", :as => "no"
               get "/notlogged", :to => "preferences#notlogged", :as => "notlogged"
             end
         end
+    end
+  
+    resources :semesters do
+        resources :shifts, :except => [:index]
     end
     
     devise_for :user
