@@ -1,46 +1,39 @@
-class ShiftsController < ApplicationController
+class ShiftTemplatesController < ApplicationController
   before_action :manager?
-  before_action :set_semester
-  before_action :set_shift, except: [:index]
+  before_action :set_shift_template, only: [:show, :edit, :update, :destroy]
+  before_action :set_semester, only: [:show, :edit, :update, :destroy,:new, :create]
 
   # GET /shifts
   # GET /shifts.json
-  def index
-    @shifts = Array.new
-    @semester.shift_templates.each{
-      |template| template.shifts.each{
-        |shift| @shifts.push(shift)
-      }
-    }
-  end
+  # def index
+  #   @shifts = Shift.all
+  # end
 
   # GET /semesters/:semester_id/shifts/:id(.:format) 
   # GET /shifts/1.json
   def show
-    
   end
 
   # GET /semesters/:semester_id/shifts/new(.:format)
   def new
-    @shift_template = ShiftTemplate.new
-    @shift_detail = ShiftDetail.new
-    @semester = Semester.find(session[:semester]["id"])
+    @users = User.all.collect{ |u| [u.username] }
   end
 
   # GET /semesters/:semester_id/shifts/:id/edit(.:format)
   def edit
     @users = User.all.collect{ |u| [u.username] }
+    @shift_detail = @shift_template.shift_detail
   end
 
   # POST /semesters/:semester_id/shifts(.:format) 
   # POST /shifts.json
   def create
-    #byebug
-    @semester = Semester.find(session[:semester]["id"])
-    
     @shift_detail = ShiftDetail.find_by_location_and_description(params[:shift_detail][:location],params[:shift_detail][:description])
-    @shift_template = @shift_detail.shift_templates.create(shift_params)
+    @shift_template = @shift_detail.shift_templates.create(shift_template_params)
+    @user = User.where(username: params[:shift_template][:assigned_user]).take
+    @shift_template.user = @user
     @shift_template.semesters << @semester
+    @shift_template.save
     redirect_to semester_path(@semester)
     
     # @shift = Shift.new(shift_params)
@@ -59,11 +52,17 @@ class ShiftsController < ApplicationController
   # PATCH/PUT /semesters/:semester_id/shifts/:id(.:format)
   # PATCH/PUT /semesters/:semester_id/shifts/:id(.:format)
   def update
-    @shift.update_attributes(:is_checked_off => shift_params[:is_checked_off] == "Yes", :date => Date.new(shift_params["date(1i)"].to_i, shift_params["date(2i)"].to_i, shift_params["date(3i)"].to_i))
-    @user = User.where(:username => shift_params[:user_id]).first
-    @shift.user = @user
-    @shift.save
-    redirect_to semester_shifts_path(@semester)
+    @shift_detail = ShiftDetail.find_by_location_and_description(params[:shift_detail][:location],params[:shift_detail][:description])
+    if (!@shift_template.shift_detail.eql?@shift_detail)
+      @temp_shift_detail = @shift_template.shift_detail
+      @shift_template.shift_detail = @shift_detail
+      @shift_template.save
+      ShiftDetail.check_and_remove_hanging_details(@temp_shift_detail)
+    end
+    @user = User.where(username: params[:shift_template][:assigned_user]).take
+    @shift_template.user = @user
+    @shift_template.update_attributes!(shift_template_params)
+    redirect_to semester_path(@semester)
   end
   # def update
   #   respond_to do |format|
@@ -80,47 +79,28 @@ class ShiftsController < ApplicationController
   # DELETE /semesters/:semester_id/shifts/:id(.:format)
   # DELETE /shifts/1.json
   def destroy
-    @semester = Semester.find(session[:semester]["id"])
-    @shift = Shift.find params[:id]
-    @shift.destroy
+    @shift_template.shifts.each {|s| s.destroy}
+    @shift_template.destroy
     redirect_to semester_path(@semester)
     # respond_to do |format|
     #   format.html { redirect_to shifts_url, notice: 'Shift was successfully destroyed.' }
     #   format.json { head :no_content }
     # end
   end
-  
-  def add_new_shift_user
-    @shift = Shift.find params[:id]
-    @user = User.where(:email => params[:shift][:users]).first
-    @shift.users << @user
-    redirect_to(semester_shift_path(@shift))
-  end
-  
-  def delete_new_shift_user
-    @shift = Shift.find params[:id]
-    @user = User.find params[:user_id]
-    @shift.users.destroy(@user)
-    redirect_to(semester_shift_path(@shift))
-  end
 
   private
     # Use callbacks to share common setup or constraints between actions.
+    def set_shift_template
+      @shift_template = ShiftTemplate.find(params[:id])
+    end
+    
     def set_semester
       @semester = Semester.find(params[:semester_id])
     end
-    
-    def set_shift
-      @shift = Shift.find(params[:id])
-    end
 
     # Never trust parameters from the scary internet, only allow the white list through.
-    def shift_params
-      params.require(:shift).permit(:is_checked_off,:user_id,:date)
-    end
-    
     def shift_template_params
-      params.require(:shift_template).permit(:description, :location, :semester)
+      params.require(:shift_template).permit(:day,:hours,:floor,:details)
     end
     
     def shift_detail_params
